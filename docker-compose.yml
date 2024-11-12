@@ -1,0 +1,215 @@
+version: "3.8"
+
+services:
+  # Config Servers
+  configsvr1:
+    image: mongo:5.0
+    container_name: configsvr1
+    command: mongod --configsvr --replSet configReplSet --port 27019 --dbpath /data/db
+    ports:
+      - "27019:27019"
+    volumes:
+      - configsvr1:/data/db
+      - ./scripts:/scripts
+    networks:
+      - mongodb_network
+
+  configsvr2:
+    image: mongo:5.0
+    container_name: configsvr2
+    command: mongod --configsvr --replSet configReplSet --port 27019 --dbpath /data/db
+    ports:
+      - "27029:27019"
+    volumes:
+      - configsvr2:/data/db
+      - ./scripts:/scripts
+    networks:
+      - mongodb_network
+
+  configsvr3:
+    image: mongo:5.0
+    container_name: configsvr3
+    command: mongod --configsvr --replSet configReplSet --port 27019 --dbpath /data/db
+    ports:
+      - "27039:27019"
+    volumes:
+      - configsvr3:/data/db
+      - ./scripts:/scripts
+    networks:
+      - mongodb_network
+
+  # Shard 1 Replicas
+  shard1svr1:
+    image: mongo:5.0
+    container_name: shard1svr1
+    command: mongod --shardsvr --replSet shard1RS --port 27018 --dbpath /data/db
+    ports:
+      - "27018:27018"
+    volumes:
+      - shard1svr1:/data/db
+      - ./scripts:/scripts
+    networks:
+      - mongodb_network
+
+  shard1svr2:
+    image: mongo:5.0
+    container_name: shard1svr2
+    command: mongod --shardsvr --replSet shard1RS --port 27018 --dbpath /data/db
+    ports:
+      - "27028:27018"
+    volumes:
+      - shard1svr2:/data/db
+      - ./scripts:/scripts
+    networks:
+      - mongodb_network
+
+  shard1svr3:
+    image: mongo:5.0
+    container_name: shard1svr3
+    command: mongod --shardsvr --replSet shard1RS --port 27018 --dbpath /data/db
+    ports:
+      - "27038:27018"
+    volumes:
+      - shard1svr3:/data/db
+      - ./scripts:/scripts
+    networks:
+      - mongodb_network
+
+  # Shard 2 Replicas
+  shard2svr1:
+    image: mongo:5.0
+    container_name: shard2svr1
+    command: mongod --shardsvr --replSet shard2RS --port 27018 --dbpath /data/db
+    ports:
+      - "27048:27018"
+    volumes:
+      - shard2svr1:/data/db
+      - ./scripts:/scripts
+    networks:
+      - mongodb_network
+
+  shard2svr2:
+    image: mongo:5.0
+    container_name: shard2svr2
+    command: mongod --shardsvr --replSet shard2RS --port 27018 --dbpath /data/db
+    ports:
+      - "27058:27018"
+    volumes:
+      - shard2svr2:/data/db
+      - ./scripts:/scripts
+    networks:
+      - mongodb_network
+
+  shard2svr3:
+    image: mongo:5.0
+    container_name: shard2svr3
+    command: mongod --shardsvr --replSet shard2RS --port 27018 --dbpath /data/db
+    ports:
+      - "27068:27018"
+    volumes:
+      - shard2svr3:/data/db
+      - ./scripts:/scripts
+    networks:
+      - mongodb_network
+
+  # Mongos Routers
+  mongos1:
+    image: mongo:5.0
+    container_name: mongos1
+    command: mongos --configdb configReplSet/configsvr1:27019,configsvr2:27019,configsvr3:27019 --port 27017 --bind_ip_all
+    ports:
+      - "27017:27017"
+    depends_on:
+      - configsvr1
+      - configsvr2
+      - configsvr3
+    volumes:
+      - ./scripts:/scripts
+    networks:
+      - mongodb_network
+
+  mongos2:
+    image: mongo:5.0
+    container_name: mongos2
+    command: mongos --configdb configReplSet/configsvr1:27019,configsvr2:27019,configsvr3:27019 --port 27017 --bind_ip_all
+    ports:
+      - "27027:27017"
+    depends_on:
+      - configsvr1
+      - configsvr2
+      - configsvr3
+    volumes:
+      - ./scripts:/scripts
+    networks:
+      - mongodb_network
+
+  # HAProxy Load Balancer
+  haproxy:
+    image: haproxy:latest
+    container_name: haproxy
+    ports:
+      - "27117:27017"
+      - "8404:8404"
+    volumes:
+      - ./haproxy:/usr/local/etc/haproxy:ro
+    networks:
+      - mongodb_network
+    depends_on:
+      - mongos1
+      - mongos2
+
+  # Monitoring Stack
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    networks:
+      - mongodb_network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=admin
+    networks:
+      - mongodb_network
+    depends_on:
+      - prometheus
+
+  mongodb_exporter:
+    image: bitnami/mongodb-exporter:0.20.7
+    container_name: mongodb_exporter
+    command:
+      - "--mongodb.uri=mongodb://mongos1:27017"
+    ports:
+      - "9216:9216"
+    networks:
+      - mongodb_network
+    depends_on:
+      - mongos1
+
+volumes:
+  configsvr1:
+  configsvr2:
+  configsvr3:
+  shard1svr1:
+  shard1svr2:
+  shard1svr3:
+  shard2svr1:
+  shard2svr2:
+  shard2svr3:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  mongodb_network:
+    driver: bridge

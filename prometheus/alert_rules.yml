@@ -1,0 +1,20 @@
+groups:
+  - name: mongodb_alerts
+    rules:
+      - alert: HighConnectionCount
+        expr: mongodb_connections > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: High number of connections
+          description: MongoDB instance has more than 1000 connections
+
+      - alert: ReplicationLag
+        expr: mongodb_replset_member_optime_date{state="SECONDARY"} - ignoring(state) mongodb_replset_member_optime_date{state="PRIMARY"} > 10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Replication lag detected
+          description: MongoDB replication lag is more than 10 seconds
